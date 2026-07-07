@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePwaInstall } from '@/composables/usePwaInstall'
 
 const auth = useAuthStore()
 const router = useRouter()
+const { canInstall, install } = usePwaInstall()
 
 const nuevaPassword = ref('')
 const confirmarPassword = ref('')
@@ -88,6 +90,10 @@ async function onLogout() {
 
         <button class="btn-primary" :disabled="saving" type="submit">
           {{ saving ? 'Guardando...' : 'Guardar contraseña' }}
+        </button>
+
+        <button v-if="canInstall" class="btn-ghost" type="button" @click="install">
+          Instalar app
         </button>
       </form>
 
