@@ -3,10 +3,18 @@ import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFacturasStore, type Factura, type Movimiento } from '@/stores/facturas'
 import { usePlantillasStore, type Plantilla } from '@/stores/plantillas'
-import { downloadPdf, generatePdf, getPlantillaFields, matchCampoReservado, type PlantillaField } from '@/utils/pdf'
+import {
+  downloadPdf,
+  generatePdf,
+  getPlantillaFields,
+  matchCampoReservado,
+  serializeTableRows,
+  type PlantillaField,
+} from '@/utils/pdf'
 import PlantillaCampoInput from '@/components/PlantillaCampoInput.vue'
 import { useTourStore } from '@/stores/tour'
 import { destroyTour, runFacturaFormTour } from '@/composables/useTour'
+import { DIVISAS, formatMoney, type Divisa } from '@/utils/money'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +30,7 @@ const saving = ref(false)
 const cliente = ref('')
 const concepto = ref('')
 const montoTotal = ref<number | null>(null)
+const divisa = ref<Divisa>('MXN')
 const plantillaId = ref<string>('')
 
 // --- campos custom de la plantilla elegida (texto/imagen que llena el usuario) ---
@@ -34,15 +43,21 @@ const movimientos = ref<Movimiento[]>([])
 const nuevoMonto = ref<number | null>(null)
 const nuevoTipo = ref<'abono' | 'cargo'>('abono')
 const metodoPago = ref('')
-const nota = ref('')
+const descripcion = ref('')
 
 const saldo = computed(() =>
   factura.value ? facturasStore.calcularSaldo(factura.value, movimientos.value) : 0,
 )
 
-// campos de la plantilla que NO se auto-llenan (todo lo que no matchea cliente/concepto/monto/saldo/fecha)
+const divisaActual = computed(() => factura.value?.divisa ?? divisa.value)
+
+// campos de la plantilla que NO se auto-llenan (todo lo que no matchea cliente/concepto/monto/saldo/fecha).
+// Las imágenes marcadas "no editable" en el Designer ya traen su contenido fijo horneado en la
+// plantilla: a diferencia del texto, no hay nada que pedirle al usuario, así que se ocultan.
 const camposManuales = computed(() =>
-  plantillaFields.value.filter((f) => !matchCampoReservado(f.name)),
+  plantillaFields.value.filter(
+    (f) => !matchCampoReservado(f.name) && !(f.type === 'image' && f.readOnly),
+  ),
 )
 
 // mantiene sincronizados los campos reservados con lo que ya se escribió en el formulario
@@ -55,9 +70,22 @@ watchEffect(() => {
     else if (kind === 'concepto')
       camposPlantilla.value[field.name] = concepto.value || factura.value?.concepto || ''
     else if (kind === 'monto_total')
-      camposPlantilla.value[field.name] = String(montoTotal.value ?? factura.value?.monto_total ?? '')
-    else if (kind === 'saldo') camposPlantilla.value[field.name] = saldo.value.toFixed(2)
+      camposPlantilla.value[field.name] = formatMoney(
+        montoTotal.value ?? factura.value?.monto_total ?? 0,
+        divisaActual.value,
+      )
+    else if (kind === 'saldo')
+      camposPlantilla.value[field.name] = formatMoney(saldo.value, divisaActual.value)
     else if (kind === 'fecha') camposPlantilla.value[field.name] = new Date().toLocaleDateString()
+    else if (kind === 'historial') {
+      const rows = movimientos.value.map((m) => [
+        new Date(m.created_at).toLocaleDateString(),
+        m.metodo_pago ?? '',
+        formatMoney(m.monto, divisaActual.value),
+        m.nota ?? '',
+      ])
+      camposPlantilla.value[field.name] = serializeTableRows(rows)
+    }
   }
 })
 
@@ -112,6 +140,7 @@ async function onCrear() {
       cliente: cliente.value,
       concepto: concepto.value,
       monto_total: montoTotal.value,
+      divisa: divisa.value,
       plantilla_id: plantillaId.value || null,
       inputs: camposPlantilla.value,
     })
@@ -135,7 +164,7 @@ async function onAgregarMovimiento() {
       factura_id: factura.value.id,
       monto,
       metodo_pago: metodoPago.value || null,
-      nota: nota.value || null,
+      nota: descripcion.value || null,
     })
 
     factura.value = await facturasStore.fetchById(factura.value.id)
@@ -143,7 +172,7 @@ async function onAgregarMovimiento() {
 
     nuevoMonto.value = null
     metodoPago.value = ''
-    nota.value = ''
+    descripcion.value = ''
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Error al registrar el movimiento'
   } finally {
@@ -217,6 +246,13 @@ async function onGenerarPdf() {
           <input v-model.number="montoTotal" type="number" step="0.01" required />
         </label>
 
+        <label class="factura__field">
+          <span>Divisa</span>
+          <select v-model="divisa">
+            <option v-for="d in DIVISAS" :key="d.value" :value="d.value">{{ d.label }}</option>
+          </select>
+        </label>
+
         <label id="tour-select-plantilla" class="factura__field">
           <span>Plantilla (opcional)</span>
           <select v-model="plantillaId">
@@ -261,7 +297,7 @@ async function onGenerarPdf() {
         <div class="factura__metrics">
           <div>
             <p class="factura__metric-label">Total</p>
-            <p class="factura__metric-value">{{ factura.monto_total.toFixed(2) }}</p>
+            <p class="factura__metric-value">{{ formatMoney(factura.monto_total, factura.divisa) }}</p>
           </div>
           <div>
             <p class="factura__metric-label">Saldo</p>
@@ -269,7 +305,7 @@ async function onGenerarPdf() {
               class="factura__metric-value"
               :class="saldo <= 0 ? 'factura__metric-value--pagada' : 'factura__metric-value--pendiente'"
             >
-              {{ saldo.toFixed(2) }}
+              {{ formatMoney(saldo, factura.divisa) }}
             </p>
           </div>
         </div>
@@ -330,7 +366,7 @@ async function onGenerarPdf() {
               class="factura__ledger-monto"
               :class="m.monto < 0 ? 'factura__ledger-monto--abono' : 'factura__ledger-monto--cargo'"
             >
-              {{ m.monto > 0 ? '+' : '' }}{{ m.monto.toFixed(2) }}
+              {{ m.monto > 0 ? '+' : '' }}{{ formatMoney(m.monto, factura.divisa) }}
             </span>
           </li>
         </ul>
@@ -359,8 +395,8 @@ async function onGenerarPdf() {
           </label>
 
           <label class="factura__field">
-            <span>Nota</span>
-            <input v-model="nota" type="text" />
+            <span>Descripción</span>
+            <input v-model="descripcion" type="text" />
           </label>
 
           <button class="btn-primary" :disabled="saving" type="submit">

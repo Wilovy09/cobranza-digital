@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '@/utils/supabase'
+import type { Divisa } from '@/utils/money'
 
 export interface Factura {
   id: string
@@ -8,6 +9,7 @@ export interface Factura {
   cliente: string
   concepto: string
   monto_total: number
+  divisa: Divisa
   estado: 'pendiente' | 'pagada'
   inputs: Record<string, string>
   created_by: string
@@ -75,6 +77,7 @@ export const useFacturasStore = defineStore('facturas', () => {
     cliente: string
     concepto: string
     monto_total: number
+    divisa: Divisa
     plantilla_id?: string | null
     inputs?: Record<string, string>
   }) {

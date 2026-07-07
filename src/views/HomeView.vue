@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useFacturasStore } from '@/stores/facturas'
 import { destroyTour, startTour } from '@/composables/useTour'
+import { formatMoney } from '@/utils/money'
 
 const store = useFacturasStore()
 const router = useRouter()
@@ -44,7 +45,7 @@ function onStartTour() {
             <span class="home__concepto">{{ f.concepto }}</span>
           </div>
           <span class="home__fecha">{{ new Date(f.updated_at).toLocaleDateString() }}</span>
-          <span class="home__monto">{{ f.monto_total.toFixed(2) }}</span>
+          <span class="home__monto">{{ formatMoney(f.monto_total, f.divisa) }}</span>
           <span
             class="stamp-chip"
             :class="f.estado === 'pagada' ? 'stamp--pagada' : 'stamp--pendiente'"

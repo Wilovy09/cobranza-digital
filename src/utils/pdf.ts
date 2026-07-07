@@ -11,6 +11,8 @@ export interface PlantillaField {
   content: string
   /** Solo para tablas: nombres de columnas, fijos (no se agregan/quitan al llenar). */
   head?: string[]
+  /** "No editable" en el Designer de PDFME. Ver nota en `resolveReadOnlyFields`. */
+  readOnly?: boolean
 }
 
 /** Campos custom (texto/imagen/tabla) definidos en la plantilla, para pedírselos al usuario. */
@@ -27,6 +29,7 @@ export function getPlantillaFields(template: Template): PlantillaField[] {
         type: schema.type,
         content: typeof schema.content === 'string' ? schema.content : '',
         head: Array.isArray(head) ? (head as string[]) : undefined,
+        readOnly: Boolean(schema.readOnly),
       })
     }
   }
@@ -34,7 +37,13 @@ export function getPlantillaFields(template: Template): PlantillaField[] {
   return [...fields.values()]
 }
 
-export type CampoReservado = 'cliente' | 'concepto' | 'monto_total' | 'saldo' | 'fecha'
+export type CampoReservado =
+  | 'cliente'
+  | 'concepto'
+  | 'monto_total'
+  | 'saldo'
+  | 'fecha'
+  | 'historial'
 
 /**
  * Si el nombre del campo de la plantilla contiene una de estas palabras
@@ -48,6 +57,7 @@ export function matchCampoReservado(name: string): CampoReservado | null {
   if (n.includes('concepto')) return 'concepto'
   if (n.includes('saldo')) return 'saldo'
   if (n.includes('monto') || n.includes('total')) return 'monto_total'
+  if (n.includes('historial')) return 'historial'
   if (n.includes('fecha')) return 'fecha'
   return null
 }
@@ -59,6 +69,11 @@ export const CAMPOS_RESERVADOS_INFO: { slug: string; descripcion: string }[] = [
   { slug: '{total}', descripcion: 'Monto total de la factura' },
   { slug: '{saldo}', descripcion: 'Saldo pendiente actual' },
   { slug: '{fecha}', descripcion: 'Fecha en que se genera el PDF' },
+  {
+    slug: '{historial}',
+    descripcion:
+      'Tabla con todos los movimientos (debe ser tipo Tabla, columnas en este orden: Fecha | Método de pago | Monto | Descripción)',
+  },
 ]
 
 export function parseTableRows(content: string, columnCount: number): string[][] {

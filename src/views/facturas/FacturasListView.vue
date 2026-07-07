@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useFacturasStore } from '@/stores/facturas'
+import { formatMoney } from '@/utils/money'
 
 const store = useFacturasStore()
 
@@ -37,7 +38,7 @@ async function onDelete(id: string) {
             <span class="facturas__concepto">{{ f.concepto }}</span>
           </RouterLink>
           <span class="facturas__fecha">{{ new Date(f.updated_at).toLocaleDateString() }}</span>
-          <span class="facturas__monto">{{ f.monto_total.toFixed(2) }}</span>
+          <span class="facturas__monto">{{ formatMoney(f.monto_total, f.divisa) }}</span>
           <span
             class="stamp-chip"
             :class="f.estado === 'pagada' ? 'stamp--pagada' : 'stamp--pendiente'"
