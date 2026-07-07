@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { parseTableRows, readImageAsDataUrl, serializeTableRows, type PlantillaField } from '@/utils/pdf'
+import {
+  isMarkdownField,
+  parseTableRows,
+  readImageAsDataUrl,
+  serializeTableRows,
+  type PlantillaField,
+} from '@/utils/pdf'
 
 const props = defineProps<{
   field: PlantillaField
@@ -42,7 +48,16 @@ async function onImagenChange(e: Event) {
 
 <template>
   <div class="campo">
-    <label v-if="field.type === 'text'" class="campo__label">
+    <label v-if="field.type === 'text' && isMarkdownField(field.name)" class="campo__label">
+      <span>{{ field.name }} (Markdown: #, ##, -, 1.)</span>
+      <textarea
+        :value="modelValue"
+        rows="6"
+        @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+      />
+    </label>
+
+    <label v-else-if="field.type === 'text'" class="campo__label">
       <span>{{ field.name }}</span>
       <input
         :value="modelValue"
@@ -106,16 +121,20 @@ async function onImagenChange(e: Event) {
 }
 
 .campo input[type='text'],
-.campo input[type='file'] {
+.campo input[type='file'],
+.campo textarea {
   padding: 9px var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-sunken);
   font-size: 14px;
   color: var(--color-ink);
+  font-family: inherit;
+  resize: vertical;
 }
 
-.campo input[type='text']:focus-visible {
+.campo input[type='text']:focus-visible,
+.campo textarea:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
